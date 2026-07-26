@@ -58,7 +58,11 @@
     th, td { padding: 0.8rem 1rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
     th { background: #f1f5f9; font-weight: 600; }
 
-    /* Shipping Label Style (Print Preview) */
+    /* Modal / Login Dialog */
+    .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 1rem; }
+    .modal-box { background: #fff; border-radius: 8px; max-width: 400px; width: 100%; padding: 2rem; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
+
+    /* Shipping Label Style */
     @media print {
       body * { visibility: hidden; }
       #printable-label, #printable-label * { visibility: visible; }
@@ -76,8 +80,30 @@
     <nav id="dynamic-nav-links">
       <!-- Dynamic Links -->
     </nav>
-    <button class="mode-btn" id="view-toggle-btn" onclick="toggleView()">Switch to Admin Portal</button>
+    <button class="mode-btn" id="view-toggle-btn" onclick="handleNavButtonClick()">Switch to Admin Portal</button>
   </header>
+
+  <!-- LOGIN MODAL DIALOG -->
+  <div id="login-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h3 style="margin-bottom: 0.5rem;">Admin Sign In</h3>
+      <p style="color:#64748b; font-size:0.85rem; margin-bottom: 1.5rem;">Enter your credentials to access store management.</p>
+      
+      <form onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" id="login-username" required placeholder="admin">
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="login-password" required placeholder="••••••••">
+        </div>
+        <p id="login-error" style="color:#dc2626; font-size:0.85rem; margin-bottom:1rem;" class="hidden">Invalid username or password.</p>
+        <button type="submit" class="btn" style="width:100%;">Sign In</button>
+        <button type="button" class="btn btn-secondary" style="width:100%; margin-top:0.5rem;" onclick="closeLoginModal()">Cancel</button>
+      </form>
+    </div>
+  </div>
 
   <!-- STOREFRONT VIEW (CUSTOMER VIEW) -->
   <main id="customer-view" class="container">
@@ -89,8 +115,11 @@
 
   <!-- ADMIN PORTAL VIEW -->
   <main id="admin-view" class="container hidden">
-    <h2>Admin Management Portal</h2>
-    <br>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+      <h2>Admin Management Portal</h2>
+      <button class="btn btn-secondary" onclick="handleLogout()">Sign Out</button>
+    </div>
+
     <div class="admin-tabs">
       <button class="tab-btn active" onclick="switchAdminTab(event, 'inventory-tab')">Inventory</button>
       <button class="tab-btn" onclick="switchAdminTab(event, 'fulfillment-tab')">Fulfillment & Shipping</button>
@@ -225,6 +254,11 @@
   </main>
 
   <script>
+    // --- UPDATED ADMIN CREDENTIALS ---
+    const ADMIN_USER = "admin";
+    const ADMIN_PASS = "TianasTexit";
+
+    // --- DEFAULT INITIAL DATA ---
     const defaultInventory = [
       { id: 1, name: "Silk Scarf", price: 29.99, desc: "100% pure silk lightweight scarf.", img: "" }
     ];
@@ -242,6 +276,7 @@
     let inventory = JSON.parse(localStorage.getItem("store_inventory")) || defaultInventory;
     let navLinks = JSON.parse(localStorage.getItem("store_links")) || defaultLinks;
     let orders = JSON.parse(localStorage.getItem("store_orders")) || defaultOrders;
+    let isLoggedIn = sessionStorage.getItem("admin_logged_in") === "true";
 
     function saveState() {
       localStorage.setItem("store_inventory", JSON.stringify(inventory));
@@ -255,21 +290,74 @@
       renderAdminInventory();
       renderAdminLinks();
       renderOrders();
+      updateViewDisplay();
     }
 
-    function toggleView() {
+    // --- AUTHENTICATION & NAVIGATION LOGIC ---
+    function handleNavButtonClick() {
       const customerView = document.getElementById("customer-view");
-      const adminView = document.getElementById("admin-view");
-      const toggleBtn = document.getElementById("view-toggle-btn");
-
-      if (adminView.classList.contains("hidden")) {
-        adminView.classList.remove("hidden");
-        customerView.classList.add("hidden");
-        toggleBtn.innerText = "Switch to Customer Storefront";
+      
+      if (!customerView.classList.contains("hidden")) {
+        if (isLoggedIn) {
+          showAdminPortal();
+        } else {
+          openLoginModal();
+        }
       } else {
-        adminView.classList.add("hidden");
-        customerView.classList.remove("hidden");
-        toggleBtn.innerText = "Switch to Admin Portal";
+        showStorefront();
+      }
+    }
+
+    function openLoginModal() {
+      document.getElementById("login-error").classList.add("hidden");
+      document.getElementById("login-modal").classList.remove("hidden");
+    }
+
+    function closeLoginModal() {
+      document.getElementById("login-modal").classList.add("hidden");
+    }
+
+    function handleLogin(event) {
+      event.preventDefault();
+      const user = document.getElementById("login-username").value;
+      const pass = document.getElementById("login-password").value;
+
+      if (user === ADMIN_USER && pass === ADMIN_PASS) {
+        isLoggedIn = true;
+        sessionStorage.setItem("admin_logged_in", "true");
+        closeLoginModal();
+        showAdminPortal();
+        document.getElementById("login-username").value = "";
+        document.getElementById("login-password").value = "";
+      } else {
+        document.getElementById("login-error").classList.remove("hidden");
+      }
+    }
+
+    function handleLogout() {
+      isLoggedIn = false;
+      sessionStorage.removeItem("admin_logged_in");
+      showStorefront();
+      alert("Signed out successfully.");
+    }
+
+    function showAdminPortal() {
+      document.getElementById("customer-view").classList.add("hidden");
+      document.getElementById("admin-view").classList.remove("hidden");
+      document.getElementById("view-toggle-btn").innerText = "Switch to Customer Storefront";
+    }
+
+    function showStorefront() {
+      document.getElementById("admin-view").classList.add("hidden");
+      document.getElementById("customer-view").classList.remove("hidden");
+      document.getElementById("view-toggle-btn").innerText = "Switch to Admin Portal";
+    }
+
+    function updateViewDisplay() {
+      if (isLoggedIn && !document.getElementById("admin-view").classList.contains("hidden")) {
+        showAdminPortal();
+      } else {
+        showStorefront();
       }
     }
 
@@ -277,13 +365,12 @@
       document.querySelectorAll(".admin-tab-content").forEach(el => el.classList.add("hidden"));
       document.querySelectorAll(".tab-btn").forEach(el => el.classList.remove("active"));
       document.getElementById(tabId).classList.remove("hidden");
-      if (e) {
-        if (e.target) {
-          e.target.classList.add("active");
-        }
+      if (e && e.target) {
+        e.target.classList.add("active");
       }
     }
 
+    // --- RENDER FUNCTIONS ---
     function renderNav() {
       const navContainer = document.getElementById("dynamic-nav-links");
       navContainer.innerHTML = navLinks.map(link => `<a href="${link.url}">${link.title}</a>`).join('');
@@ -357,6 +444,7 @@
       `).join('');
     }
 
+    // --- ACTION HANDLERS ---
     function handleAddProduct(event) {
       event.preventDefault();
       const name = document.getElementById("prod-name").value;
