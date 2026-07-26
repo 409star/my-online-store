@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E-Commerce Store & Admin Portal</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #0f172a;
+      --border: #e2e8f0;
+      --success: #16a34a;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); line-height: 1.5; padding-bottom: 40px; }
+
+    /* Top Nav Bar */
+    header { background: var(--card-bg); border-bottom: 1px solid var(--border); padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 100; flex-wrap: wrap; gap: 1rem; }
+    .brand { font-weight: 700; font-size: 1.25rem; }
+    nav { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+    nav a { color: var(--text); text-decoration: none; font-size: 0.95rem; font-weight: 500; }
+    nav a:hover { color: var(--primary); }
+    .mode-btn { background: var(--text); color: #fff; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; }
+
+    /* Layout Containers */
+    .container { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+    .hidden { display: none !important; }
+
+    /* Cards & Grids */
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 1.5rem; margin-top: 1.5rem; }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; padding: 1rem; display: flex; flex-direction: column; justify-content: space-between; }
+    .img-container { width: 100%; height: 180px; border-radius: 6px; overflow: hidden; background-color: #f1f5f9; display: flex; align-items: center; justify-content: center; }
+    .img-container img { width: 100%; height: 100%; object-fit: cover; }
+    .img-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #64748b; font-weight: 600; font-size: 0.9rem; background-color: #e2e8f0; }
+
+    /* Buttons & Inputs */
+    .btn { background: var(--primary); color: #fff; border: none; padding: 0.6rem 1rem; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.9rem; }
+    .btn:hover { background: var(--primary-hover); }
+    .btn-danger { background: #dc2626; }
+    .btn-danger:hover { background: #b91c1c; }
+    .btn-secondary { background: #64748b; }
+    .form-group { margin-bottom: 1rem; }
+    .form-group label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 0.3rem; }
+    .form-group input, .form-group textarea { width: 100%; padding: 0.6rem; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; }
+
+    /* Admin Tabs */
+    .admin-tabs { display: flex; gap: 0.5rem; border-bottom: 2px solid var(--border); margin-bottom: 1.5rem; overflow-x: auto; }
+    .tab-btn { padding: 0.6rem 1.2rem; border: none; background: none; cursor: pointer; font-weight: 600; color: #64748b; border-bottom: 2px solid transparent; margin-bottom: -2px; white-space: nowrap; }
+    .tab-btn.active { color: var(--primary); border-color: var(--primary); }
+
+    /* Tables */
+    .table-responsive { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; background: var(--card-bg); border-radius: 8px; overflow: hidden; min-width: 500px; }
+    th, td { padding: 0.8rem 1rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+    th { background: #f1f5f9; font-weight: 600; }
+
+    /* Shipping Label Style (Print Preview) */
+    @media print {
+      body * { visibility: hidden; }
+      #printable-label, #printable-label * { visibility: visible; }
+      #printable-label { position: absolute; left: 0; top: 0; width: 4in; height: 6in; border: 2px solid #000; padding: 0.5in; box-sizing: border-box; }
+    }
+    .shipping-label { width: 320px; border: 2px dashed #000; padding: 1.2rem; background: #fff; margin: 1rem auto; font-family: monospace; }
+    .barcode { font-size: 1.8rem; letter-spacing: 4px; text-align: center; margin: 1rem 0; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 0.5rem 0; }
+  </style>
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header>
+    <div class="brand">Storefront</div>
+    <nav id="dynamic-nav-links">
+      <!-- Dynamic Links -->
+    </nav>
+    <button class="mode-btn" id="view-toggle-btn" onclick="toggleView()">Switch to Admin Portal</button>
+  </header>
+
+  <!-- STOREFRONT VIEW (CUSTOMER VIEW) -->
+  <main id="customer-view" class="container">
+    <h2>Available Products</h2>
+    <div class="grid" id="store-inventory">
+      <!-- Dynamic Products -->
+    </div>
+  </main>
+
+  <!-- ADMIN PORTAL VIEW -->
+  <main id="admin-view" class="container hidden">
+    <h2>Admin Management Portal</h2>
+    <br>
+    <div class="admin-tabs">
+      <button class="tab-btn active" onclick="switchAdminTab(event, 'inventory-tab')">Inventory</button>
+      <button class="tab-btn" onclick="switchAdminTab(event, 'fulfillment-tab')">Fulfillment & Shipping</button>
+      <button class="tab-btn" onclick="switchAdminTab(event, 'links-tab')">Navigation Links</button>
+      <button class="tab-btn" onclick="switchAdminTab(event, 'messages-tab')">Customer Comms</button>
+    </div>
+
+    <!-- 1. Inventory Management Section -->
+    <section id="inventory-tab" class="admin-tab-content">
+      <div class="card">
+        <h3>Add New Inventory Item</h3>
+        <br>
+        <form id="add-inventory-form" onsubmit="handleAddProduct(event)">
+          <div class="form-group">
+            <label>Item Name</label>
+            <input type="text" id="prod-name" required placeholder="e.g., Linen Summer Dress">
+          </div>
+          <div class="form-group">
+            <label>Price ($)</label>
+            <input type="number" step="0.01" id="prod-price" required placeholder="49.99">
+          </div>
+          <div class="form-group">
+            <label>Description</label>
+            <textarea id="prod-desc" rows="2" placeholder="Item details..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>Image URL (Optional)</label>
+            <input type="url" id="prod-img-url" placeholder="https://example.com/image.jpg">
+          </div>
+          <button type="submit" class="btn">Add Item to Inventory</button>
+        </form>
+      </div>
+
+      <h3 style="margin-top: 2rem;">Current Inventory</h3>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Price</th>
+              <th>Description</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="admin-inventory-list">
+            <!-- Dynamic Rows -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 2. Fulfillment & Printable Shipping Labels Section -->
+    <section id="fulfillment-tab" class="admin-tab-content hidden">
+      <h3>Customer Orders & Fulfillment</h3>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Order ID</th>
+              <th>Customer</th>
+              <th>Items</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="orders-list">
+            <!-- Dynamic Rows -->
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Printable Shipping Label Area -->
+      <div id="label-modal" class="card hidden" style="margin-top: 2rem;">
+        <h3>Shipping Label Preview</h3>
+        <div id="printable-label" class="shipping-label">
+          <p><strong>FROM:</strong><br>My Retail Store<br>123 Commerce St<br>Raleigh, NC 27601</p>
+          <hr style="margin: 0.5rem 0;">
+          <p><strong>SHIP TO:</strong><br><span id="lbl-name">Jane Doe</span><br><span id="lbl-address">456 Main St, Austin, TX</span></p>
+          <div class="barcode">||| | |||| | ||| |||| |</div>
+          <p style="text-align: center; font-size: 0.8rem;">TRACKING #: 9400 1000 0000 0000 0000 00</p>
+        </div>
+        <button class="btn" onclick="window.print()">Print Shipping Label</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('label-modal').classList.add('hidden')">Close</button>
+      </div>
+    </section>
+
+    <!-- 3. Dynamic Links Management Section -->
+    <section id="links-tab" class="admin-tab-content hidden">
+      <div class="card">
+        <h3>Manage Navigation Links</h3>
+        <br>
+        <form onsubmit="handleAddLink(event)">
+          <div class="form-group">
+            <label>Link Title</label>
+            <input type="text" id="link-title" required placeholder="e.g., About Us">
+          </div>
+          <div class="form-group">
+            <label>URL / Destination</label>
+            <input type="text" id="link-url" required placeholder="e.g., #about">
+          </div>
+          <button type="submit" class="btn">Add Link</button>
+        </form>
+      </div>
+
+      <h3 style="margin-top: 2rem;">Active Links</h3>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>URL</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="admin-links-list">
+            <!-- Dynamic Rows -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 4. Customer Communications Section -->
+    <section id="messages-tab" class="admin-tab-content hidden">
+      <h3>Customer Messages & Support</h3>
+      <div class="card" style="margin-top: 1rem;">
+        <p><strong>From:</strong> Sarah M. (sarah@example.com)</p>
+        <p style="margin: 0.5rem 0;"><em>"Hi! What is the estimated shipping time for the Silk Scarf?"</em></p>
+        <textarea style="width:100%; padding: 0.5rem; margin-bottom: 0.5rem;" rows="2" placeholder="Type your reply..."></textarea>
+        <button class="btn" onclick="alert('Response sent to customer email!')">Send Response</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const defaultInventory = [
+      { id: 1, name: "Silk Scarf", price: 29.99, desc: "100% pure silk lightweight scarf.", img: "" }
+    ];
+
+    const defaultLinks = [
+      { id: 1, title: "Shop", url: "#shop" },
+      { id: 2, title: "New Arrivals", url: "#new" },
+      { id: 3, title: "Contact", url: "#contact" }
+    ];
+
+    const defaultOrders = [
+      { id: "ORD-8921", customer: "Jane Doe", address: "456 Main St, Raleigh NC", items: "Silk Scarf (1)", status: "Unfulfilled" }
+    ];
+
+    let inventory = JSON.parse(localStorage.getItem("store_inventory")) || defaultInventory;
+    let navLinks = JSON.parse(localStorage.getItem("store_links")) || defaultLinks;
+    let orders = JSON.parse(localStorage.getItem("store_orders")) || defaultOrders;
+
+    function saveState() {
+      localStorage.setItem("store_inventory", JSON.stringify(inventory));
+      localStorage.setItem("store_links", JSON.stringify(navLinks));
+      localStorage.setItem("store_orders", JSON.stringify(orders));
+    }
+
+    function renderAll() {
+      renderNav();
+      renderStorefront();
+      renderAdminInventory();
+      renderAdminLinks();
+      renderOrders();
+    }
+
+    function toggleView() {
+      const customerView = document.getElementById("customer-view");
+      const adminView = document.getElementById("admin-view");
+      const toggleBtn = document.getElementById("view-toggle-btn");
+
+      if (adminView.classList.contains("hidden")) {
+        adminView.classList.remove("hidden");
+        customerView.classList.add("hidden");
+        toggleBtn.innerText = "Switch to Customer Storefront";
+      } else {
+        adminView.classList.add("hidden");
+        customerView.classList.remove("hidden");
+        toggleBtn.innerText = "Switch to Admin Portal";
+      }
+    }
+
+    function switchAdminTab(e, tabId) {
+      document.querySelectorAll(".admin-tab-content").forEach(el => el.classList.add("hidden"));
+      document.querySelectorAll(".tab-btn").forEach(el => el.classList.remove("active"));
+      document.getElementById(tabId).classList.remove("hidden");
+      if (e) {
+        if (e.target) {
+          e.target.classList.add("active");
+        }
+      }
+    }
+
+    function renderNav() {
+      const navContainer = document.getElementById("dynamic-nav-links");
+      navContainer.innerHTML = navLinks.map(link => `<a href="${link.url}">${link.title}</a>`).join('');
+    }
+
+    function renderStorefront() {
+      const grid = document.getElementById("store-inventory");
+      if (inventory.length === 0) {
+        grid.innerHTML = "<p style='color:#64748b;'>No products available in inventory.</p>";
+        return;
+      }
+
+      grid.innerHTML = inventory.map(item => {
+        const formattedPrice = "$" + Number(item.price).toFixed(2);
+        const imageContent = item.img 
+          ? `<img src="${item.img}" alt="${item.name}">` 
+          : `<div class="img-placeholder">${item.name}</div>`;
+
+        return `
+          <div class="card">
+            <div>
+              <div class="img-container">${imageContent}</div>
+              <h4 style="margin-top:0.75rem">${item.name}</h4>
+              <p style="color:#64748b; font-size:0.85rem; margin-top:0.25rem">${item.desc || 'No description provided.'}</p>
+            </div>
+            <div>
+              <p style="font-weight:700; font-size:1.1rem; margin: 0.75rem 0 0.5rem 0;">${formattedPrice}</p>
+              <button class="btn" style="width:100%" onclick="simulateCheckout('${item.name}', ${item.price})">Buy Now</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderAdminInventory() {
+      const list = document.getElementById("admin-inventory-list");
+      list.innerHTML = inventory.map(item => `
+        <tr>
+          <td><strong>${item.name}</strong></td>
+          <td>$${Number(item.price).toFixed(2)}</td>
+          <td>${item.desc || '-'}</td>
+          <td><button class="btn btn-danger" onclick="deleteProduct(${item.id})">Remove</button></td>
+        </tr>
+      `).join('');
+    }
+
+    function renderAdminLinks() {
+      const list = document.getElementById("admin-links-list");
+      list.innerHTML = navLinks.map(link => `
+        <tr>
+          <td>${link.title}</td>
+          <td>${link.url}</td>
+          <td><button class="btn btn-danger" onclick="deleteLink(${link.id})">Remove</button></td>
+        </tr>
+      `).join('');
+    }
+
+    function renderOrders() {
+      const list = document.getElementById("orders-list");
+      list.innerHTML = orders.map(ord => `
+        <tr>
+          <td>${ord.id}</td>
+          <td>${ord.customer}</td>
+          <td>${ord.items}</td>
+          <td><strong>${ord.status}</strong></td>
+          <td>
+            <button class="btn" onclick="openShippingLabel('${ord.customer}', '${ord.address}')">Generate Label</button>
+            ${ord.status === 'Unfulfilled' ? `<button class="btn btn-secondary" onclick="markFulfilled('${ord.id}')">Mark Fulfilled</button>` : ''}
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function handleAddProduct(event) {
+      event.preventDefault();
+      const name = document.getElementById("prod-name").value;
+      const price = parseFloat(document.getElementById("prod-price").value);
+      const desc = document.getElementById("prod-desc").value;
+      const img = document.getElementById("prod-img-url").value;
+
+      inventory.push({ id: Date.now(), name, price, desc, img });
+      saveState();
+      renderStorefront();
+      renderAdminInventory();
+
+      document.getElementById("add-inventory-form").reset();
+      alert("Product added successfully!");
+    }
+
+    function deleteProduct(id) {
+      inventory = inventory.filter(i => i.id !== id);
+      saveState();
+      renderStorefront();
+      renderAdminInventory();
+    }
+
+    function handleAddLink(event) {
+      event.preventDefault();
+      const title = document.getElementById("link-title").value;
+      const url = document.getElementById("link-url").value;
+
+      navLinks.push({ id: Date.now(), title, url });
+      saveState();
+      renderNav();
+      renderAdminLinks();
+
+      document.getElementById("link-title").value = "";
+      document.getElementById("link-url").value = "";
+    }
+
+    function deleteLink(id) {
+      navLinks = navLinks.filter(l => l.id !== id);
+      saveState();
+      renderNav();
+      renderAdminLinks();
+    }
+
+    function simulateCheckout(itemName, price) {
+      const formattedPrice = "$" + Number(price).toFixed(2);
+      const choice = confirm(`Proceed to checkout for ${itemName} (${formattedPrice})?\n\nThis simulates standard payment processing (Credit Card / Apple Pay / PayPal).`);
+      if (choice) {
+        const newOrderId = "ORD-" + Math.floor(1000 + Math.random() * 9000);
+        orders.push({
+          id: newOrderId,
+          customer: "Guest Checkout",
+          address: "100 Express Blvd, Charlotte NC",
+          items: `${itemName} (1)`,
+          status: "Unfulfilled"
+        });
+        saveState();
+        renderOrders();
+        alert("Order placed successfully! Switch to the Admin Portal to process fulfillment.");
+      }
+    }
+
+    function markFulfilled(orderId) {
+      const order = orders.find(o => o.id === orderId);
+      if (order) {
+        order.status = "Fulfilled";
+        saveState();
+        renderOrders();
+      }
+    }
+
+    function openShippingLabel(name, address) {
+      document.getElementById("lbl-name").innerText = name;
+      document.getElementById("lbl-address").innerText = address;
+      document.getElementById("label-modal").classList.remove("hidden");
+    }
+
+    renderAll();
+  </script>
+</body>
+</html>
