@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>E-Commerce Store & Admin Portal</title>
+  <!-- Supabase JS Client Library -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-javascript@2"></script>
   <style>
     :root {
       --primary: #2563eb;
@@ -87,18 +89,18 @@
   <div id="login-modal" class="modal-overlay hidden">
     <div class="modal-box">
       <h3 style="margin-bottom: 0.5rem;">Admin Sign In</h3>
-      <p style="color:#64748b; font-size:0.85rem; margin-bottom: 1.5rem;">Enter your credentials to access store management.</p>
+      <p style="color:#64748b; font-size:0.85rem; margin-bottom: 1.5rem;">Enter your Supabase admin credentials to access store management.</p>
       
       <form onsubmit="handleLogin(event)">
         <div class="form-group">
-          <label>Username</label>
-          <input type="text" id="login-username" required placeholder="admin">
+          <label>Admin Email</label>
+          <input type="email" id="login-username" required placeholder="name@example.com">
         </div>
         <div class="form-group">
           <label>Password</label>
           <input type="password" id="login-password" required placeholder="••••••••">
         </div>
-        <p id="login-error" style="color:#dc2626; font-size:0.85rem; margin-bottom:1rem;" class="hidden">Invalid username or password.</p>
+        <p id="login-error" style="color:#dc2626; font-size:0.85rem; margin-bottom:1rem;" class="hidden"></p>
         <button type="submit" class="btn" style="width:100%;">Sign In</button>
         <button type="button" class="btn btn-secondary" style="width:100%; margin-top:0.5rem;" onclick="closeLoginModal()">Cancel</button>
       </form>
@@ -254,55 +256,54 @@
   </main>
 
   <script>
-    // --- UPDATED ADMIN CREDENTIALS ---
-    const ADMIN_USER = "admin";
-    const ADMIN_PASS = "TianasTexit";
+    // --- SUPABASE CONFIGURATION ---
+    const SUPABASE_URL = 'https://eoitncptqxcegogjrnma.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvaXRuY3B0cXhjZWdvZ2pybm1hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxMDE1NzIsImV4cCI6MjEwMDY3NzU3Mn0.-CvU7tsNn1xy9vP_u-t9ePtJKsgXuzCDMQVqPmZO9HA';
+    
+    // Initialize Supabase Client
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // --- DEFAULT INITIAL DATA ---
-    const defaultInventory = [
-      { id: 1, name: "Silk Scarf", price: 29.99, desc: "100% pure silk lightweight scarf.", img: "" }
-    ];
-
-    const defaultLinks = [
+    // Initial state fallback arrays
+    let inventory = [];
+    let navLinks = [
       { id: 1, title: "Shop", url: "#shop" },
       { id: 2, title: "New Arrivals", url: "#new" },
       { id: 3, title: "Contact", url: "#contact" }
     ];
-
-    const defaultOrders = [
+    let orders = [
       { id: "ORD-8921", customer: "Jane Doe", address: "456 Main St, Raleigh NC", items: "Silk Scarf (1)", status: "Unfulfilled" }
     ];
 
-    let inventory = JSON.parse(localStorage.getItem("store_inventory")) || defaultInventory;
-    let navLinks = JSON.parse(localStorage.getItem("store_links")) || defaultLinks;
-    let orders = JSON.parse(localStorage.getItem("store_orders")) || defaultOrders;
-    let isLoggedIn = sessionStorage.getItem("admin_logged_in") === "true";
-
-    function saveState() {
-      localStorage.setItem("store_inventory", JSON.stringify(inventory));
-      localStorage.setItem("store_links", JSON.stringify(navLinks));
-      localStorage.setItem("store_orders", JSON.stringify(orders));
-    }
-
-    function renderAll() {
+    async function renderAll() {
       renderNav();
-      renderStorefront();
-      renderAdminInventory();
+      await renderStorefront();
+      await renderAdminInventory();
       renderAdminLinks();
       renderOrders();
-      updateViewDisplay();
+      await checkExistingSession();
     }
 
     // --- AUTHENTICATION & NAVIGATION LOGIC ---
+    async function checkExistingSession() {
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (session) {
+        showAdminPortal();
+      } else {
+        showStorefront();
+      }
+    }
+
     function handleNavButtonClick() {
       const customerView = document.getElementById("customer-view");
       
       if (!customerView.classList.contains("hidden")) {
-        if (isLoggedIn) {
-          showAdminPortal();
-        } else {
-          openLoginModal();
-        }
+        supabaseClient.auth.getSession().then(({ data: { session } }) => {
+          if (session) {
+            showAdminPortal();
+          } else {
+            openLoginModal();
+          }
+        });
       } else {
         showStorefront();
       }
@@ -317,26 +318,29 @@
       document.getElementById("login-modal").classList.add("hidden");
     }
 
-    function handleLogin(event) {
+    // Updated Login Handler using Supabase Auth
+    async function handleLogin(event) {
       event.preventDefault();
-      const user = document.getElementById("login-username").value;
-      const pass = document.getElementById("login-password").value;
+      const email = document.getElementById("login-username").value;
+      const password = document.getElementById("login-password").value;
 
-      if (user === ADMIN_USER && pass === ADMIN_PASS) {
-        isLoggedIn = true;
-        sessionStorage.setItem("admin_logged_in", "true");
+      const { data, error } = await supabaseClient.auth.signInWithPassword({
+        email: email,
+        password: password
+      });
+
+      if (error) {
+        document.getElementById("login-error").innerText = error.message;
+        document.getElementById("login-error").classList.remove("hidden");
+      } else {
         closeLoginModal();
         showAdminPortal();
-        document.getElementById("login-username").value = "";
-        document.getElementById("login-password").value = "";
-      } else {
-        document.getElementById("login-error").classList.remove("hidden");
+        await renderAll();
       }
     }
 
-    function handleLogout() {
-      isLoggedIn = false;
-      sessionStorage.removeItem("admin_logged_in");
+    async function handleLogout() {
+      await supabaseClient.auth.signOut();
       showStorefront();
       alert("Signed out successfully.");
     }
@@ -351,14 +355,6 @@
       document.getElementById("admin-view").classList.add("hidden");
       document.getElementById("customer-view").classList.remove("hidden");
       document.getElementById("view-toggle-btn").innerText = "Switch to Admin Portal";
-    }
-
-    function updateViewDisplay() {
-      if (isLoggedIn && !document.getElementById("admin-view").classList.contains("hidden")) {
-        showAdminPortal();
-      } else {
-        showStorefront();
-      }
     }
 
     function switchAdminTab(e, tabId) {
@@ -376,45 +372,45 @@
       navContainer.innerHTML = navLinks.map(link => `<a href="${link.url}">${link.title}</a>`).join('');
     }
 
-    function renderStorefront() {
+    // Updated Fetch Function for Storefront
+    async function renderStorefront() {
       const grid = document.getElementById("store-inventory");
-      if (inventory.length === 0) {
-        grid.innerHTML = "<p style='color:#64748b;'>No products available in inventory.</p>";
-        return;
-      }
-
-      grid.innerHTML = inventory.map(item => {
-        const formattedPrice = "$" + Number(item.price).toFixed(2);
-        const imageContent = item.img 
-          ? `<img src="${item.img}" alt="${item.name}">` 
-          : `<div class="img-placeholder">${item.name}</div>`;
-
-        return `
+      const { data: products, error } = await supabaseClient.from('products').select('*');
+      
+      if (products && products.length > 0) {
+        inventory = products;
+        grid.innerHTML = products.map(item => `
           <div class="card">
             <div>
-              <div class="img-container">${imageContent}</div>
+              <div class="img-container">${item.image_url ? `<img src="${item.image_url}">` : `<div class="img-placeholder">${item.name}</div>`}</div>
               <h4 style="margin-top:0.75rem">${item.name}</h4>
-              <p style="color:#64748b; font-size:0.85rem; margin-top:0.25rem">${item.desc || 'No description provided.'}</p>
+              <p style="color:#64748b; font-size:0.85rem; margin-top:0.25rem">${item.description || ''}</p>
             </div>
             <div>
-              <p style="font-weight:700; font-size:1.1rem; margin: 0.75rem 0 0.5rem 0;">${formattedPrice}</p>
+              <p style="font-weight:700; font-size:1.1rem; margin:0.75rem 0;">$${Number(item.price).toFixed(2)}</p>
               <button class="btn" style="width:100%" onclick="simulateCheckout('${item.name}', ${item.price})">Buy Now</button>
             </div>
           </div>
-        `;
-      }).join('');
+        `).join('');
+      } else {
+        grid.innerHTML = "<p style='color:#64748b;'>No products available in inventory.</p>";
+      }
     }
 
-    function renderAdminInventory() {
+    async function renderAdminInventory() {
       const list = document.getElementById("admin-inventory-list");
-      list.innerHTML = inventory.map(item => `
-        <tr>
-          <td><strong>${item.name}</strong></td>
-          <td>$${Number(item.price).toFixed(2)}</td>
-          <td>${item.desc || '-'}</td>
-          <td><button class="btn btn-danger" onclick="deleteProduct(${item.id})">Remove</button></td>
-        </tr>
-      `).join('');
+      const { data: products } = await supabaseClient.from('products').select('*');
+      
+      if (products) {
+        list.innerHTML = products.map(item => `
+          <tr>
+            <td><strong>${item.name}</strong></td>
+            <td>$${Number(item.price).toFixed(2)}</td>
+            <td>${item.description || '-'}</td>
+            <td><button class="btn btn-danger" onclick="deleteProduct(${item.id})">Remove</button></td>
+          </tr>
+        `).join('');
+      }
     }
 
     function renderAdminLinks() {
@@ -445,27 +441,35 @@
     }
 
     // --- ACTION HANDLERS ---
-    function handleAddProduct(event) {
+    async function handleAddProduct(event) {
       event.preventDefault();
       const name = document.getElementById("prod-name").value;
       const price = parseFloat(document.getElementById("prod-price").value);
-      const desc = document.getElementById("prod-desc").value;
-      const img = document.getElementById("prod-img-url").value;
+      const description = document.getElementById("prod-desc").value;
+      const image_url = document.getElementById("prod-img-url").value;
 
-      inventory.push({ id: Date.now(), name, price, desc, img });
-      saveState();
-      renderStorefront();
-      renderAdminInventory();
+      const { error } = await supabaseClient.from('products').insert([
+        { name, price, description, image_url }
+      ]);
 
-      document.getElementById("add-inventory-form").reset();
-      alert("Product added successfully!");
+      if (error) {
+        alert("Error adding product: " + error.message);
+      } else {
+        await renderStorefront();
+        await renderAdminInventory();
+        document.getElementById("add-inventory-form").reset();
+        alert("Product added successfully to Supabase!");
+      }
     }
 
-    function deleteProduct(id) {
-      inventory = inventory.filter(i => i.id !== id);
-      saveState();
-      renderStorefront();
-      renderAdminInventory();
+    async function deleteProduct(id) {
+      const { error } = await supabaseClient.from('products').delete().eq('id', id);
+      if (error) {
+        alert("Error deleting product: " + error.message);
+      } else {
+        await renderStorefront();
+        await renderAdminInventory();
+      }
     }
 
     function handleAddLink(event) {
@@ -474,7 +478,6 @@
       const url = document.getElementById("link-url").value;
 
       navLinks.push({ id: Date.now(), title, url });
-      saveState();
       renderNav();
       renderAdminLinks();
 
@@ -484,34 +487,30 @@
 
     function deleteLink(id) {
       navLinks = navLinks.filter(l => l.id !== id);
-      saveState();
       renderNav();
       renderAdminLinks();
     }
 
+    // --- STRIPE CHECKOUT REDIRECT HANDLER ---
     function simulateCheckout(itemName, price) {
-      const formattedPrice = "$" + Number(price).toFixed(2);
-      const choice = confirm(`Proceed to checkout for ${itemName} (${formattedPrice})?\n\nThis simulates standard payment processing (Credit Card / Apple Pay / PayPal).`);
-      if (choice) {
-        const newOrderId = "ORD-" + Math.floor(1000 + Math.random() * 9000);
-        orders.push({
-          id: newOrderId,
-          customer: "Guest Checkout",
-          address: "100 Express Blvd, Charlotte NC",
-          items: `${itemName} (1)`,
-          status: "Unfulfilled"
-        });
-        saveState();
-        renderOrders();
-        alert("Order placed successfully! Switch to the Admin Portal to process fulfillment.");
-      }
+      const newOrderId = "ORD-" + Math.floor(1000 + Math.random() * 9000);
+      orders.push({
+        id: newOrderId,
+        customer: "Stripe Checkout Guest",
+        address: "Collected via Stripe",
+        items: `${itemName} (1)`,
+        status: "Unfulfilled"
+      });
+      renderOrders();
+
+      // Redirect buyer directly to Stripe Checkout
+      window.location.href = "https://buy.stripe.com/fZueVd5Pl82N9gTaxo08g00";
     }
 
     function markFulfilled(orderId) {
       const order = orders.find(o => o.id === orderId);
       if (order) {
         order.status = "Fulfilled";
-        saveState();
         renderOrders();
       }
     }
