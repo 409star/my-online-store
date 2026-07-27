@@ -80,7 +80,9 @@
   <header>
     <div class="brand">Storefront</div>
     <nav id="dynamic-nav-links">
-      <!-- Dynamic Links -->
+      <a href="#shop">Shop</a>
+      <a href="#new">New Arrivals</a>
+      <a href="#contact">Contact</a>
     </nav>
     <button class="mode-btn" id="view-toggle-btn" onclick="handleNavButtonClick()">Switch to Admin Portal</button>
   </header>
@@ -111,7 +113,18 @@
   <main id="customer-view" class="container">
     <h2>Available Products</h2>
     <div class="grid" id="store-inventory">
-      <!-- Dynamic Products -->
+      <!-- Pre-rendered Static Product Card -->
+      <div class="card">
+        <div>
+          <div class="img-container"><div class="img-placeholder">Silk Scarf</div></div>
+          <h4 style="margin-top:0.75rem">Silk Scarf</h4>
+          <p style="color:#64748b; font-size:0.85rem; margin-top:0.25rem">100% pure silk lightweight scarf.</p>
+        </div>
+        <div>
+          <p style="font-weight:700; font-size:1.1rem; margin:0.75rem 0;">$29.99</p>
+          <button class="btn" style="width:100%" onclick="simulateCheckout('Silk Scarf', 29.99)">Buy Now</button>
+        </div>
+      </div>
     </div>
   </main>
 
@@ -256,15 +269,24 @@
   </main>
 
   <script>
-    // --- SUPABASE CONFIGURATION ---
+    // --- SUPABASE CONFIGURATION (Clean single-line strings) ---
     const SUPABASE_URL = 'https://eoitncptqxcegogjrnma.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvaXRuY3B0cXhjZWdvZ2pybm1hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxMDE1NzIsImV4cCI6MjEwMDY3NzU3Mn0.-CvU7tsNn1xy9vP_u-t9ePtJKsgXuzCDMQVqPmZO9HA';
     
-    // Initialize Supabase Client
-    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // Initialize Supabase Client safely
+    let supabaseClient = null;
+    try {
+      if (window.supabase) {
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      }
+    } catch (e) {
+      console.warn("Supabase initialization error:", e);
+    }
 
-    // Initial state fallback arrays
-    let inventory = [];
+    // Default local fallback data
+    let defaultInventory = [
+      { id: 1, name: "Silk Scarf", price: 29.99, description: "100% pure silk lightweight scarf.", image_url: "" }
+    ];
     let navLinks = [
       { id: 1, title: "Shop", url: "#shop" },
       { id: 2, title: "New Arrivals", url: "#new" },
@@ -276,34 +298,41 @@
 
     async function renderAll() {
       renderNav();
-      await renderStorefront();
-      await renderAdminInventory();
       renderAdminLinks();
       renderOrders();
+      await renderStorefront();
+      await renderAdminInventory();
       await checkExistingSession();
     }
 
-    // --- AUTHENTICATION & NAVIGATION LOGIC ---
     async function checkExistingSession() {
-      const { data: { session } } = await supabaseClient.auth.getSession();
-      if (session) {
-        showAdminPortal();
-      } else {
-        showStorefront();
+      if (!supabaseClient) return;
+      try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+          showAdminPortal();
+        } else {
+          showStorefront();
+        }
+      } catch (err) {
+        console.warn("Session check error:", err);
       }
     }
 
     function handleNavButtonClick() {
       const customerView = document.getElementById("customer-view");
-      
       if (!customerView.classList.contains("hidden")) {
-        supabaseClient.auth.getSession().then(({ data: { session } }) => {
-          if (session) {
-            showAdminPortal();
-          } else {
-            openLoginModal();
-          }
-        });
+        if (supabaseClient) {
+          supabaseClient.auth.getSession().then(({ data: { session } }) => {
+            if (session) {
+              showAdminPortal();
+            } else {
+              openLoginModal();
+            }
+          }).catch(() => openLoginModal());
+        } else {
+          openLoginModal();
+        }
       } else {
         showStorefront();
       }
@@ -318,11 +347,16 @@
       document.getElementById("login-modal").classList.add("hidden");
     }
 
-    // Updated Login Handler using Supabase Auth
     async function handleLogin(event) {
       event.preventDefault();
       const email = document.getElementById("login-username").value;
       const password = document.getElementById("login-password").value;
+
+      if (!supabaseClient) {
+        document.getElementById("login-error").innerText = "Database connection offline.";
+        document.getElementById("login-error").classList.remove("hidden");
+        return;
+      }
 
       const { data, error } = await supabaseClient.auth.signInWithPassword({
         email: email,
@@ -340,7 +374,9 @@
     }
 
     async function handleLogout() {
-      await supabaseClient.auth.signOut();
+      if (supabaseClient) {
+        await supabaseClient.auth.signOut();
+      }
       showStorefront();
       alert("Signed out successfully.");
     }
@@ -366,20 +402,30 @@
       }
     }
 
-    // --- RENDER FUNCTIONS ---
     function renderNav() {
       const navContainer = document.getElementById("dynamic-nav-links");
-      navContainer.innerHTML = navLinks.map(link => `<a href="${link.url}">${link.title}</a>`).join('');
+      if (navContainer) {
+        navContainer.innerHTML = navLinks.map(link => `<a href="${link.url}">${link.title}</a>`).join('');
+      }
     }
 
-    // Updated Fetch Function for Storefront
     async function renderStorefront() {
       const grid = document.getElementById("store-inventory");
-      const { data: products, error } = await supabaseClient.from('products').select('*');
-      
-      if (products && products.length > 0) {
-        inventory = products;
-        grid.innerHTML = products.map(item => `
+      let itemsToRender = defaultInventory;
+
+      if (supabaseClient) {
+        try {
+          const { data: products, error } = await supabaseClient.from('products').select('*');
+          if (!error && products && products.length > 0) {
+            itemsToRender = products;
+          }
+        } catch (err) {
+          console.warn("Error fetching products from Supabase:", err);
+        }
+      }
+
+      if (grid && itemsToRender.length > 0) {
+        grid.innerHTML = itemsToRender.map(item => `
           <div class="card">
             <div>
               <div class="img-container">${item.image_url ? `<img src="${item.image_url}">` : `<div class="img-placeholder">${item.name}</div>`}</div>
@@ -392,17 +438,26 @@
             </div>
           </div>
         `).join('');
-      } else {
-        grid.innerHTML = "<p style='color:#64748b;'>No products available in inventory.</p>";
       }
     }
 
     async function renderAdminInventory() {
       const list = document.getElementById("admin-inventory-list");
-      const { data: products } = await supabaseClient.from('products').select('*');
-      
-      if (products) {
-        list.innerHTML = products.map(item => `
+      let itemsToRender = defaultInventory;
+
+      if (supabaseClient) {
+        try {
+          const { data: products } = await supabaseClient.from('products').select('*');
+          if (products && products.length > 0) {
+            itemsToRender = products;
+          }
+        } catch (err) {
+          console.warn("Error fetching admin inventory:", err);
+        }
+      }
+
+      if (list) {
+        list.innerHTML = itemsToRender.map(item => `
           <tr>
             <td><strong>${item.name}</strong></td>
             <td>$${Number(item.price).toFixed(2)}</td>
@@ -415,32 +470,35 @@
 
     function renderAdminLinks() {
       const list = document.getElementById("admin-links-list");
-      list.innerHTML = navLinks.map(link => `
-        <tr>
-          <td>${link.title}</td>
-          <td>${link.url}</td>
-          <td><button class="btn btn-danger" onclick="deleteLink(${link.id})">Remove</button></td>
-        </tr>
-      `).join('');
+      if (list) {
+        list.innerHTML = navLinks.map(link => `
+          <tr>
+            <td>${link.title}</td>
+            <td>${link.url}</td>
+            <td><button class="btn btn-danger" onclick="deleteLink(${link.id})">Remove</button></td>
+          </tr>
+        `).join('');
+      }
     }
 
     function renderOrders() {
       const list = document.getElementById("orders-list");
-      list.innerHTML = orders.map(ord => `
-        <tr>
-          <td>${ord.id}</td>
-          <td>${ord.customer}</td>
-          <td>${ord.items}</td>
-          <td><strong>${ord.status}</strong></td>
-          <td>
-            <button class="btn" onclick="openShippingLabel('${ord.customer}', '${ord.address}')">Generate Label</button>
-            ${ord.status === 'Unfulfilled' ? `<button class="btn btn-secondary" onclick="markFulfilled('${ord.id}')">Mark Fulfilled</button>` : ''}
-          </td>
-        </tr>
-      `).join('');
+      if (list) {
+        list.innerHTML = orders.map(ord => `
+          <tr>
+            <td>${ord.id}</td>
+            <td>${ord.customer}</td>
+            <td>${ord.items}</td>
+            <td><strong>${ord.status}</strong></td>
+            <td>
+              <button class="btn" onclick="openShippingLabel('${ord.customer}', '${ord.address}')">Generate Label</button>
+              ${ord.status === 'Unfulfilled' ? `<button class="btn btn-secondary" onclick="markFulfilled('${ord.id}')">Mark Fulfilled</button>` : ''}
+            </td>
+          </tr>
+        `).join('');
+      }
     }
 
-    // --- ACTION HANDLERS ---
     async function handleAddProduct(event) {
       event.preventDefault();
       const name = document.getElementById("prod-name").value;
@@ -448,28 +506,36 @@
       const description = document.getElementById("prod-desc").value;
       const image_url = document.getElementById("prod-img-url").value;
 
-      const { error } = await supabaseClient.from('products').insert([
-        { name, price, description, image_url }
-      ]);
+      if (supabaseClient) {
+        const { error } = await supabaseClient.from('products').insert([
+          { name, price, description, image_url }
+        ]);
 
-      if (error) {
-        alert("Error adding product: " + error.message);
+        if (error) {
+          alert("Error adding product: " + error.message);
+          return;
+        }
       } else {
-        await renderStorefront();
-        await renderAdminInventory();
-        document.getElementById("add-inventory-form").reset();
-        alert("Product added successfully to Supabase!");
+        defaultInventory.push({ id: Date.now(), name, price, description, image_url });
       }
+
+      await renderStorefront();
+      await renderAdminInventory();
+      document.getElementById("add-inventory-form").reset();
+      alert("Product added successfully!");
     }
 
     async function deleteProduct(id) {
-      const { error } = await supabaseClient.from('products').delete().eq('id', id);
-      if (error) {
-        alert("Error deleting product: " + error.message);
-      } else {
-        await renderStorefront();
-        await renderAdminInventory();
+      if (supabaseClient) {
+        const { error } = await supabaseClient.from('products').delete().eq('id', id);
+        if (error) {
+          alert("Error deleting product: " + error.message);
+          return;
+        }
       }
+      defaultInventory = defaultInventory.filter(i => i.id !== id);
+      await renderStorefront();
+      await renderAdminInventory();
     }
 
     function handleAddLink(event) {
@@ -491,7 +557,6 @@
       renderAdminLinks();
     }
 
-    // --- STRIPE CHECKOUT REDIRECT HANDLER ---
     function simulateCheckout(itemName, price) {
       const newOrderId = "ORD-" + Math.floor(1000 + Math.random() * 9000);
       orders.push({
@@ -503,7 +568,6 @@
       });
       renderOrders();
 
-      // Redirect buyer directly to Stripe Checkout
       window.location.href = "https://buy.stripe.com/fZueVd5Pl82N9gTaxo08g00";
     }
 
