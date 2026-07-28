@@ -96,7 +96,7 @@
       <form onsubmit="handleLogin(event)">
         <div class="form-group">
           <label>Admin Email</label>
-          <input type="email" id="login-username" required placeholder="name@example.com">
+          <input type="email" id="login-username" required placeholder="409star@gmail.com" value="409star@gmail.com">
         </div>
         <div class="form-group">
           <label>Password</label>
@@ -122,7 +122,7 @@
         </div>
         <div>
           <p style="font-weight:700; font-size:1.1rem; margin:0.75rem 0;">$29.99</p>
-          <button class="btn" style="width:100%" onclick="simulateCheckout('Silk Scarf', 29.99)">Buy Now</button>
+          <button class="btn" style="width:100%" onclick="window.location.href='https://buy.stripe.com/bJefZhgtZ96R9gTeNE08g01'">Buy Now</button>
         </div>
       </div>
     </div>
@@ -269,15 +269,15 @@
   </main>
 
   <script>
-    // --- SUPABASE CONFIGURATION (Clean single-line strings) ---
-    const SUPABASE_URL = 'https://eoitncptqxcegogjrnma.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvaXRuY3B0cXhjZWdvZ2pybm1hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxMDE1NzIsImV4cCI6MjEwMDY3NzU3Mn0.-CvU7tsNn1xy9vP_u-t9ePtJKsgXuzCDMQVqPmZO9HA';
+    // --- SUPABASE CONFIGURATION ---
+    const SUPABASE_URL = 'https://eoitncptqxcegogjrnma.supabase.co'; // Base URL[cite: 2]
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvaXRuY3B0cXhjZWdvZ2pybm1hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxMDE1NzIsImV4cCI6MjEwMDY3NzU3Mn0.-CvU7tsNn1xy9vP_u-t9ePtJKsgXuzCDMQVqPmZO9HA'; // Clean single-line key[cite: 2]
     
     // Initialize Supabase Client safely
     let supabaseClient = null;
     try {
       if (window.supabase) {
-        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); //[cite: 2]
       }
     } catch (e) {
       console.warn("Supabase initialization error:", e);
@@ -347,10 +347,11 @@
       document.getElementById("login-modal").classList.add("hidden");
     }
 
+    // Updated Login Handler using Supabase Auth
     async function handleLogin(event) {
       event.preventDefault();
-      const email = document.getElementById("login-username").value;
-      const password = document.getElementById("login-password").value;
+      const email = document.getElementById("login-username").value; // Target the input element ID[cite: 2]
+      const password = document.getElementById("login-password").value; // Target the input element ID[cite: 2]
 
       if (!supabaseClient) {
         document.getElementById("login-error").innerText = "Database connection offline.";
@@ -359,17 +360,17 @@
       }
 
       const { data, error } = await supabaseClient.auth.signInWithPassword({
-        email: email,
-        password: password
+        email: email, //[cite: 2]
+        password: password //[cite: 2]
       });
 
       if (error) {
-        document.getElementById("login-error").innerText = error.message;
-        document.getElementById("login-error").classList.remove("hidden");
+        document.getElementById("login-error").innerText = error.message; //[cite: 2]
+        document.getElementById("login-error").classList.remove("hidden"); //[cite: 2]
       } else {
-        closeLoginModal();
-        showAdminPortal();
-        await renderAll();
+        closeLoginModal(); //[cite: 2]
+        showAdminPortal(); //[cite: 2]
+        await renderAll(); //[cite: 2]
       }
     }
 
@@ -409,14 +410,15 @@
       }
     }
 
+    // Updated Fetch Function for Storefront
     async function renderStorefront() {
-      const grid = document.getElementById("store-inventory");
+      const grid = document.getElementById("store-inventory"); //[cite: 2]
       let itemsToRender = defaultInventory;
 
       if (supabaseClient) {
         try {
-          const { data: products, error } = await supabaseClient.from('products').select('*');
-          if (!error && products && products.length > 0) {
+          const { data: products, error } = await supabaseClient.from('products').select('*'); //[cite: 2]
+          if (!error && products && products.length > 0) { //[cite: 2]
             itemsToRender = products;
           }
         } catch (err) {
@@ -434,10 +436,10 @@
             </div>
             <div>
               <p style="font-weight:700; font-size:1.1rem; margin:0.75rem 0;">$${Number(item.price).toFixed(2)}</p>
-              <button class="btn" style="width:100%" onclick="simulateCheckout('${item.name}', ${item.price})">Buy Now</button>
+              <button class="btn" style="width:100%" onclick="window.location.href='https://buy.stripe.com/bJefZhgtZ96R9gTeNE08g01'">Buy Now</button>
             </div>
           </div>
-        `).join('');
+        `).join(''); //[cite: 2]
       }
     }
 
@@ -555,20 +557,6 @@
       navLinks = navLinks.filter(l => l.id !== id);
       renderNav();
       renderAdminLinks();
-    }
-
-    function simulateCheckout(itemName, price) {
-      const newOrderId = "ORD-" + Math.floor(1000 + Math.random() * 9000);
-      orders.push({
-        id: newOrderId,
-        customer: "Stripe Checkout Guest",
-        address: "Collected via Stripe",
-        items: `${itemName} (1)`,
-        status: "Unfulfilled"
-      });
-      renderOrders();
-
-      window.location.href = "https://buy.stripe.com/fZueVd5Pl82N9gTaxo08g00";
     }
 
     function markFulfilled(orderId) {
