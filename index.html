@@ -113,28 +113,7 @@
   <main id="customer-view" class="container">
     <h2>Available Products</h2>
     <div class="grid" id="store-inventory">
-      <div class="card">
-        <div>
-          <div class="img-container"><div class="img-placeholder">Silk Scarf</div></div>
-          <h4 style="margin-top:0.75rem">Silk Scarf</h4>
-          <p style="color:#64748b; font-size:0.85rem; margin-top:0.25rem">100% pure silk lightweight scarf.</p>
-        </div>
-        <div>
-          <p style="font-weight:700; font-size:1.1rem; margin:0.75rem 0;">$29.99</p>
-          <button class="btn" style="width:100%" onclick="window.location.href='https://buy.stripe.com/bJefZhgtZ96R9gTeNE08g01'">Buy Now</button>
-        </div>
-      </div>
-      <div class="card">
-        <div>
-          <div class="img-container"><div class="img-placeholder">Featured Item</div></div>
-          <h4 style="margin-top:0.75rem">Featured Item</h4>
-          <p style="color:#64748b; font-size:0.85rem; margin-top:0.25rem">Special collection product with instant checkout.</p>
-        </div>
-        <div>
-          <p style="font-weight:700; font-size:1.1rem; margin:0.75rem 0;">$49.99</p>
-          <button class="btn" style="width:100%" onclick="window.location.href='https://buy.stripe.com/fZueVd5Pl82N9gTaxo08g00'">Buy Now</button>
-        </div>
-      </div>
+      <!-- Dynamic Products -->
     </div>
   </main>
 
@@ -293,28 +272,18 @@
         supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       }
     } catch (e) {
-      console.warn("Supabase initialization deferred:", e);
+      console.warn("Supabase initialization error:", e);
     }
 
-    // Default products array
-    let defaultInventory = [
-      { 
-        id: 1, 
-        name: "Silk Scarf", 
-        price: 29.99, 
-        description: "100% pure silk lightweight scarf.", 
-        image_url: "", 
-        stripe_link: "https://buy.stripe.com/bJefZhgtZ96R9gTeNE08g01" 
-      },
-      { 
-        id: 2, 
-        name: "Featured Item", 
-        price: 49.99, 
-        description: "Special collection product with instant checkout.", 
-        image_url: "", 
-        stripe_link: "https://buy.stripe.com/fZueVd5Pl82N9gTaxo08g00" 
-      }
+    // Default Fallback Inventory
+    const initialFallback = [
+      { id: 1, name: "Silk Scarf", price: 29.99, description: "100% pure silk lightweight scarf.", image_url: "", stripe_link: "https://buy.stripe.com/bJefZhgtZ96R9gTeNE08g01" },
+      { id: 2, name: "Featured Item", price: 49.99, description: "Special collection product with instant checkout.", image_url: "", stripe_link: "https://buy.stripe.com/fZueVd5Pl82N9gTaxo08g00" }
     ];
+
+    // Load persisted inventory from localStorage or default
+    let localInventory = JSON.parse(localStorage.getItem("store_inventory")) || initialFallback;
+    
     let navLinks = [
       { id: 1, title: "Shop", url: "#shop" },
       { id: 2, title: "New Arrivals", url: "#new" },
@@ -382,7 +351,6 @@
       const email = document.getElementById("login-username").value.trim();
       const password = document.getElementById("login-password").value.trim();
 
-      // 1. Try Supabase Auth first
       if (supabaseClient) {
         try {
           const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
@@ -394,12 +362,9 @@
             await renderAll();
             return;
           }
-        } catch (e) {
-          console.warn("Supabase auth attempt error:", e);
-        }
+        } catch (e) {}
       }
 
-      // 2. Fallback local admin check (Ensures you are never locked out)
       const validEmails = ["tiana.thelawyer@gmail.com", "409star@gmail.com", "admin"];
       const validPasswords = ["TianasTexit", "5NVGG%/J3c&Qha2", "admin123"];
 
@@ -455,13 +420,15 @@
 
     async function renderStorefront() {
       const grid = document.getElementById("store-inventory");
-      let itemsToRender = defaultInventory;
+      let itemsToRender = localInventory;
 
       if (supabaseClient) {
         try {
           const { data: products, error } = await supabaseClient.from('products').select('*');
           if (!error && products && products.length > 0) {
             itemsToRender = products;
+            localInventory = products;
+            localStorage.setItem("store_inventory", JSON.stringify(products));
           }
         } catch (err) {
           console.warn("Error fetching products from Supabase:", err);
@@ -490,7 +457,7 @@
 
     async function renderAdminInventory() {
       const list = document.getElementById("admin-inventory-list");
-      let itemsToRender = defaultInventory;
+      let itemsToRender = localInventory;
 
       if (supabaseClient) {
         try {
@@ -554,16 +521,21 @@
       const image_url = document.getElementById("prod-img-url").value;
       const stripe_link = document.getElementById("prod-stripe-url").value || 'https://buy.stripe.com/bJefZhgtZ96R9gTeNE08g01';
 
+      const newItem = { id: Date.now(), name, price, description, image_url, stripe_link };
+
       if (supabaseClient) {
         try {
           const { error } = await supabaseClient.from('products').insert([
             { name, price, description, image_url, stripe_link }
           ]);
-          if (error) console.warn("Supabase add error:", error.message);
+          if (error) {
+            console.warn("Supabase insert error:", error.message);
+          }
         } catch(e) {}
       }
-      
-      defaultInventory.push({ id: Date.now(), name, price, description, image_url, stripe_link });
+
+      localInventory.push(newItem);
+      localStorage.setItem("store_inventory", JSON.stringify(localInventory));
 
       await renderStorefront();
       await renderAdminInventory();
@@ -577,7 +549,9 @@
           await supabaseClient.from('products').delete().eq('id', id);
         } catch(e) {}
       }
-      defaultInventory = defaultInventory.filter(i => i.id !== id);
+      localInventory = localInventory.filter(i => i.id !== id);
+      localStorage.setItem("store_inventory", JSON.stringify(localInventory));
+      
       await renderStorefront();
       await renderAdminInventory();
     }
