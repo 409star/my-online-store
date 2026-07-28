@@ -4,15 +4,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>E-Commerce Store & Admin Portal</title>
-  <!-- Primary and Fallback Supabase JS Client Libraries -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-javascript@2"></script>
-  <script>
-    if (typeof window.supabase === 'undefined') {
-      var fallbackScript = document.createElement('script');
-      fallbackScript.src = 'https://unpkg.com/@supabase/supabase-javascript@2';
-      document.head.appendChild(fallbackScript);
-    }
-  </script>
   <style>
     :root {
       --primary: #2563eb;
@@ -269,24 +260,20 @@
   </main>
 
   <script>
-    // --- SUPABASE CONFIGURATION ---
+    // --- SUPABASE DIRECT REST ENDPOINTS ---
     const SUPABASE_URL = 'https://eoitncptqxcegogjrnma.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvaXRuY3B0cXhjZWdvZ2pybm1hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxMDE1NzIsImV4cCI6MjEwMDY3NzU3Mn0.-CvU7tsNn1xy9vP_u-t9ePtJKsgXuzCDMQVqPmZO9HA';
-    
-    let supabaseClient = null;
 
-    // Helper to get or initialize Supabase on demand
-    function getSupabase() {
-      if (supabaseClient) return supabaseClient;
-      if (window.supabase && typeof window.supabase.createClient === 'function') {
-        try {
-          supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-          return supabaseClient;
-        } catch (e) {
-          console.warn("Supabase initialization error:", e);
-        }
-      }
-      return null;
+    // Native fetch helper to communicate with Supabase directly without external libraries
+    async function dbFetch(endpoint, options = {}) {
+      const token = sessionStorage.getItem("supabase_token") || SUPABASE_ANON_KEY;
+      const headers = {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        ...(options.headers || {})
+      };
+      return await fetch(`${SUPABASE_URL}${endpoint}`, { ...options, headers });
     }
 
     // Default Fallback Inventory
@@ -312,27 +299,7 @@
       renderOrders();
       await renderStorefront();
       await renderAdminInventory();
-      await checkExistingSession();
-    }
-
-    async function checkExistingSession() {
-      if (isLoggedIn) {
-        showAdminPortal();
-        return;
-      }
-      const client = getSupabase();
-      if (!client) return;
-      try {
-        const { data: { session } } = await client.auth.getSession();
-        if (session) {
-          isLoggedIn = true;
-          showAdminPortal();
-        } else {
-          showStorefront();
-        }
-      } catch (err) {
-        console.warn("Session check error:", err);
-      }
+      if (isLoggedIn) showAdminPortal();
     }
 
     function handleNavButtonClick() {
@@ -357,17 +324,26 @@
       document.getElementById("login-modal").classList.add("hidden");
     }
 
-    // Fail-Safe Login Handler
+    // Direct Auth Handler via Supabase REST API
     async function handleLogin(event) {
       event.preventDefault();
       const email = document.getElementById("login-username").value.trim();
       const password = document.getElementById("login-password").value.trim();
 
-      const client = getSupabase();
-      if (client) {
-        try {
-          const { data, error } = await client.auth.signInWithPassword({ email, password });
-          if (!error && data?.user) {
+      try {
+        const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_ANON_KEY,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ email, password })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (data.access_token) {
+            sessionStorage.setItem("supabase_token", data.access_token);
             isLoggedIn = true;
             sessionStorage.setItem("admin_logged_in", "true");
             closeLoginModal();
@@ -375,9 +351,12 @@
             await renderAll();
             return;
           }
-        } catch (e) {}
+        }
+      } catch (e) {
+        console.warn("Supabase REST auth attempt error:", e);
       }
 
+      // Local admin password fallback
       const validEmails = ["tiana.thelawyer@gmail.com", "409star@gmail.com", "admin"];
       const validPasswords = ["TianasTexit", "5NVGG%/J3c&Qha2", "admin123"];
 
@@ -396,10 +375,7 @@
     async function handleLogout() {
       isLoggedIn = false;
       sessionStorage.removeItem("admin_logged_in");
-      const client = getSupabase();
-      if (client) {
-        try { await client.auth.signOut(); } catch(e){}
-      }
+      sessionStorage.removeItem("supabase_token");
       showStorefront();
       alert("Signed out successfully.");
     }
@@ -420,9 +396,7 @@
       document.querySelectorAll(".admin-tab-content").forEach(el => el.classList.add("hidden"));
       document.querySelectorAll(".tab-btn").forEach(el => el.classList.remove("active"));
       document.getElementById(tabId).classList.remove("hidden");
-      if (e && e.target) {
-        e.target.classList.add("active");
-      }
+      if (e && e.target) e.target.classList.add("active");
     }
 
     function renderNav() {
@@ -432,22 +406,23 @@
       }
     }
 
+    // Fetches live items directly from Supabase Database
     async function renderStorefront() {
       const grid = document.getElementById("store-inventory");
       if (!grid) return;
 
       let itemsToRender = staticFallback;
-      const client = getSupabase();
 
-      if (client) {
-        try {
-          const { data: products, error } = await client.from('products').select('*');
-          if (!error && products && products.length > 0) {
+      try {
+        const res = await dbFetch('/rest/v1/products?select=*');
+        if (res.ok) {
+          const products = await res.json();
+          if (products && products.length > 0) {
             itemsToRender = products;
           }
-        } catch (err) {
-          console.warn("Error fetching live products from Supabase:", err);
         }
+      } catch (err) {
+        console.warn("Error fetching live products:", err);
       }
 
       grid.innerHTML = itemsToRender.map(item => {
@@ -473,17 +448,17 @@
       if (!list) return;
 
       let itemsToRender = staticFallback;
-      const client = getSupabase();
 
-      if (client) {
-        try {
-          const { data: products } = await client.from('products').select('*');
+      try {
+        const res = await dbFetch('/rest/v1/products?select=*');
+        if (res.ok) {
+          const products = await res.json();
           if (products && products.length > 0) {
             itemsToRender = products;
           }
-        } catch (err) {
-          console.warn("Error fetching admin inventory:", err);
         }
+      } catch (err) {
+        console.warn("Error fetching admin inventory:", err);
       }
 
       list.innerHTML = itemsToRender.map(item => `
@@ -527,7 +502,7 @@
       }
     }
 
-    // Global Add Product Handler
+    // Direct REST Add Product Handler
     async function handleAddProduct(event) {
       event.preventDefault();
       const name = document.getElementById("prod-name").value;
@@ -536,43 +511,46 @@
       const image_url = document.getElementById("prod-img-url").value;
       const stripe_link = document.getElementById("prod-stripe-url").value || 'https://buy.stripe.com/bJefZhgtZ96R9gTeNE08g01';
 
-      const client = getSupabase();
+      try {
+        const res = await dbFetch('/rest/v1/products', {
+          method: 'POST',
+          headers: { 'Prefer': 'return=representation' },
+          body: JSON.stringify({ name, price, description, image_url, stripe_link })
+        });
 
-      if (!client) {
-        alert("Unable to reach Supabase. If you have an ad-blocker or Brave Shields active, please pause it for this site and reload.");
-        return;
+        if (res.ok) {
+          alert("Product added globally to central database!");
+          document.getElementById("add-inventory-form").reset();
+          await renderStorefront();
+          await renderAdminInventory();
+        } else {
+          const errData = await res.json();
+          alert("Database Error: " + (errData.message || res.statusText));
+        }
+      } catch (err) {
+        alert("Network Error: Could not save product. " + err.message);
       }
-
-      const { data, error } = await client.from('products').insert([
-        { name, price, description, image_url, stripe_link }
-      ]);
-
-      if (error) {
-        alert("Database Error: Failed to save product globally.\n\n" + error.message);
-        return;
-      }
-
-      alert("Product added globally to central database!");
-      document.getElementById("add-inventory-form").reset();
-      await renderStorefront();
-      await renderAdminInventory();
     }
 
-    // Global Delete Product Handler
+    // Direct REST Delete Product Handler
     async function deleteProduct(id) {
       if (!confirm("Are you sure you want to delete this product globally from all devices?")) return;
 
-      const client = getSupabase();
-      if (client) {
-        const { error } = await client.from('products').delete().eq('id', id);
-        if (error) {
-          alert("Database Error: Could not delete product.\n\n" + error.message);
-          return;
-        }
-      }
+      try {
+        const res = await dbFetch(`/rest/v1/products?id=eq.${id}`, {
+          method: 'DELETE'
+        });
 
-      await renderStorefront();
-      await renderAdminInventory();
+        if (res.ok) {
+          await renderStorefront();
+          await renderAdminInventory();
+        } else {
+          const errData = await res.json();
+          alert("Delete Error: " + (errData.message || res.statusText));
+        }
+      } catch (err) {
+        alert("Network Error: " + err.message);
+      }
     }
 
     function handleAddLink(event) {
