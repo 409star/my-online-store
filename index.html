@@ -113,7 +113,7 @@
   <main id="customer-view" class="container">
     <h2>Available Products</h2>
     <div class="grid" id="store-inventory">
-      <!-- Pre-rendered Static Product Card -->
+      <!-- Pre-rendered Static Product Cards -->
       <div class="card">
         <div>
           <div class="img-container"><div class="img-placeholder">Silk Scarf</div></div>
@@ -123,6 +123,17 @@
         <div>
           <p style="font-weight:700; font-size:1.1rem; margin:0.75rem 0;">$29.99</p>
           <button class="btn" style="width:100%" onclick="window.location.href='https://buy.stripe.com/bJefZhgtZ96R9gTeNE08g01'">Buy Now</button>
+        </div>
+      </div>
+      <div class="card">
+        <div>
+          <div class="img-container"><div class="img-placeholder">Featured Item</div></div>
+          <h4 style="margin-top:0.75rem">Featured Item</h4>
+          <p style="color:#64748b; font-size:0.85rem; margin-top:0.25rem">Special collection product with instant checkout.</p>
+        </div>
+        <div>
+          <p style="font-weight:700; font-size:1.1rem; margin:0.75rem 0;">$49.99</p>
+          <button class="btn" style="width:100%" onclick="window.location.href='https://buy.stripe.com/fZueVd5Pl82N9gTaxo08g00'">Buy Now</button>
         </div>
       </div>
     </div>
@@ -277,7 +288,6 @@
     const SUPABASE_URL = 'https://eoitncptqxcegogjrnma.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvaXRuY3B0cXhjZWdvZ2pybm1hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxMDE1NzIsImV4cCI6MjEwMDY3NzU3Mn0.-CvU7tsNn1xy9vP_u-t9ePtJKsgXuzCDMQVqPmZO9HA';
     
-    // Initialize Supabase Client safely
     let supabaseClient = null;
     try {
       if (window.supabase) {
@@ -287,7 +297,7 @@
       console.warn("Supabase initialization error:", e);
     }
 
-    // Default local fallback data
+    // Default products array (loads immediately on storefront)
     let defaultInventory = [
       { 
         id: 1, 
@@ -296,6 +306,14 @@
         description: "100% pure silk lightweight scarf.", 
         image_url: "", 
         stripe_link: "https://buy.stripe.com/bJefZhgtZ96R9gTeNE08g01" 
+      },
+      { 
+        id: 2, 
+        name: "Featured Item", 
+        price: 49.99, 
+        description: "Special collection product with instant checkout.", 
+        image_url: "", 
+        stripe_link: "https://buy.stripe.com/fZueVd5Pl82N9gTaxo08g00" 
       }
     ];
     let navLinks = [
@@ -358,7 +376,6 @@
       document.getElementById("login-modal").classList.add("hidden");
     }
 
-    // Login Handler using Supabase Auth
     async function handleLogin(event) {
       event.preventDefault();
       const email = document.getElementById("login-username").value;
@@ -421,7 +438,6 @@
       }
     }
 
-    // Dynamic Storefront rendering mapped directly to Stripe Payment Links
     async function renderStorefront() {
       const grid = document.getElementById("store-inventory");
       let itemsToRender = defaultInventory;
@@ -439,7 +455,6 @@
 
       if (grid && itemsToRender.length > 0) {
         grid.innerHTML = itemsToRender.map(item => {
-          // Dynamic payment link per item or default fallback
           const payUrl = item.stripe_link || item.stripe_url || 'https://buy.stripe.com/bJefZhgtZ96R9gTeNE08g01';
           return `
             <div class="card">
