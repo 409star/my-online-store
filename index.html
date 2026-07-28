@@ -4,8 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>E-Commerce Store & Admin Portal</title>
-  <!-- Supabase JS Client Library -->
+  <!-- Primary and Fallback Supabase JS Client Libraries -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-javascript@2"></script>
+  <script>
+    if (typeof window.supabase === 'undefined') {
+      var fallbackScript = document.createElement('script');
+      fallbackScript.src = 'https://unpkg.com/@supabase/supabase-javascript@2';
+      document.head.appendChild(fallbackScript);
+    }
+  </script>
   <style>
     :root {
       --primary: #2563eb;
@@ -267,15 +274,22 @@
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvaXRuY3B0cXhjZWdvZ2pybm1hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxMDE1NzIsImV4cCI6MjEwMDY3NzU3Mn0.-CvU7tsNn1xy9vP_u-t9ePtJKsgXuzCDMQVqPmZO9HA';
     
     let supabaseClient = null;
-    try {
-      if (window.supabase) {
-        supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // Helper to get or initialize Supabase on demand
+    function getSupabase() {
+      if (supabaseClient) return supabaseClient;
+      if (window.supabase && typeof window.supabase.createClient === 'function') {
+        try {
+          supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+          return supabaseClient;
+        } catch (e) {
+          console.warn("Supabase initialization error:", e);
+        }
       }
-    } catch (e) {
-      console.warn("Supabase client init error:", e);
+      return null;
     }
 
-    // Default Fallback Inventory (Used ONLY if Supabase is completely unreachable)
+    // Default Fallback Inventory
     const staticFallback = [
       { id: 1, name: "Silk Scarf", price: 29.99, description: "100% pure silk lightweight scarf.", image_url: "", stripe_link: "https://buy.stripe.com/bJefZhgtZ96R9gTeNE08g01" },
       { id: 2, name: "Featured Item", price: 49.99, description: "Special collection product with instant checkout.", image_url: "", stripe_link: "https://buy.stripe.com/fZueVd5Pl82N9gTaxo08g00" }
@@ -306,9 +320,10 @@
         showAdminPortal();
         return;
       }
-      if (!supabaseClient) return;
+      const client = getSupabase();
+      if (!client) return;
       try {
-        const { data: { session } } = await supabaseClient.auth.getSession();
+        const { data: { session } } = await client.auth.getSession();
         if (session) {
           isLoggedIn = true;
           showAdminPortal();
@@ -342,14 +357,16 @@
       document.getElementById("login-modal").classList.add("hidden");
     }
 
+    // Fail-Safe Login Handler
     async function handleLogin(event) {
       event.preventDefault();
       const email = document.getElementById("login-username").value.trim();
       const password = document.getElementById("login-password").value.trim();
 
-      if (supabaseClient) {
+      const client = getSupabase();
+      if (client) {
         try {
-          const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+          const { data, error } = await client.auth.signInWithPassword({ email, password });
           if (!error && data?.user) {
             isLoggedIn = true;
             sessionStorage.setItem("admin_logged_in", "true");
@@ -379,8 +396,9 @@
     async function handleLogout() {
       isLoggedIn = false;
       sessionStorage.removeItem("admin_logged_in");
-      if (supabaseClient) {
-        try { await supabaseClient.auth.signOut(); } catch(e){}
+      const client = getSupabase();
+      if (client) {
+        try { await client.auth.signOut(); } catch(e){}
       }
       showStorefront();
       alert("Signed out successfully.");
@@ -414,16 +432,16 @@
       }
     }
 
-    // Fetches live global items from Supabase
     async function renderStorefront() {
       const grid = document.getElementById("store-inventory");
       if (!grid) return;
 
       let itemsToRender = staticFallback;
+      const client = getSupabase();
 
-      if (supabaseClient) {
+      if (client) {
         try {
-          const { data: products, error } = await supabaseClient.from('products').select('*');
+          const { data: products, error } = await client.from('products').select('*');
           if (!error && products && products.length > 0) {
             itemsToRender = products;
           }
@@ -455,10 +473,11 @@
       if (!list) return;
 
       let itemsToRender = staticFallback;
+      const client = getSupabase();
 
-      if (supabaseClient) {
+      if (client) {
         try {
-          const { data: products } = await supabaseClient.from('products').select('*');
+          const { data: products } = await client.from('products').select('*');
           if (products && products.length > 0) {
             itemsToRender = products;
           }
@@ -517,12 +536,14 @@
       const image_url = document.getElementById("prod-img-url").value;
       const stripe_link = document.getElementById("prod-stripe-url").value || 'https://buy.stripe.com/bJefZhgtZ96R9gTeNE08g01';
 
-      if (!supabaseClient) {
-        alert("Cannot connect to database. Please check internet or Supabase status.");
+      const client = getSupabase();
+
+      if (!client) {
+        alert("Unable to reach Supabase. If you have an ad-blocker or Brave Shields active, please pause it for this site and reload.");
         return;
       }
 
-      const { data, error } = await supabaseClient.from('products').insert([
+      const { data, error } = await client.from('products').insert([
         { name, price, description, image_url, stripe_link }
       ]);
 
@@ -541,8 +562,9 @@
     async function deleteProduct(id) {
       if (!confirm("Are you sure you want to delete this product globally from all devices?")) return;
 
-      if (supabaseClient) {
-        const { error } = await supabaseClient.from('products').delete().eq('id', id);
+      const client = getSupabase();
+      if (client) {
+        const { error } = await client.from('products').delete().eq('id', id);
         if (error) {
           alert("Database Error: Could not delete product.\n\n" + error.message);
           return;
